@@ -19,6 +19,11 @@ using System.Text;
 using ICSharpCode.Decompiler.TypeSystem.Implementation;
 using ICSharpCode.Decompiler.Documentation;
 
+using ICSharpCode.Decompiler.CSharp.Syntax;
+using ICSharpCode.Decompiler.Semantics;
+using ICSharpCode.Decompiler.TypeSystem;
+using ICSharpCode.Decompiler.TypeSystem.Implementation;
+
 namespace FuGetGallery
 {
     public class TypeDocumentation
@@ -403,7 +408,7 @@ namespace FuGetGallery
                 if (m != null) {
                     if (m.Member.SymbolKind == SymbolKind.Method) {
                         if (n is MethodDeclaration md) {
-                            if (md.GetSymbol () is DefaultResolvedMethod r)
+                            if (md.GetSymbol () is IMethod r)
                                 id = r.GetIdString ();
                             return "c-md";
                         }
@@ -411,7 +416,7 @@ namespace FuGetGallery
                     }
                     if (m.Member.SymbolKind == SymbolKind.Field) {
                         if (n is FieldDeclaration fd) {
-                            if (fd.GetSymbol () is DefaultResolvedField r)
+                            if (fd.GetSymbol () is IField r)
                                 id = r.GetIdString ();
                             return "c-fd";
                         }
@@ -419,12 +424,12 @@ namespace FuGetGallery
                     }
                     if (m.Member.SymbolKind == SymbolKind.Event) {
                         if (n is EventDeclaration ed) {
-                            if (ed.GetSymbol () is DefaultResolvedEvent r)
+                            if (ed.GetSymbol () is IEvent r)
                                 id = r.GetIdString ();
                             return "c-ed";
                         }
                         if (n is CustomEventDeclaration ed2) {
-                            if (ed2.GetSymbol () is DefaultResolvedEvent r)
+                            if (ed2.GetSymbol () is IEvent r)
                                 id = r.GetIdString ();
                             return "c-ed";
                         }
@@ -432,14 +437,14 @@ namespace FuGetGallery
                     }
                     if (m.Member.SymbolKind == SymbolKind.Constructor) {
                         if (n is ConstructorDeclaration cd) {
-                            if (cd.GetSymbol () is DefaultResolvedEvent r)
+                            if (cd.GetSymbol () is IEvent r)
                                 id = r.GetIdString ();
                             return "c-cd";
                         }
                         return "c-cr";
                     }
                     if (n is PropertyDeclaration pd) {
-                        if (pd.GetSymbol () is DefaultResolvedProperty r)
+                        if (pd.GetSymbol () is IProperty r)
                             id = r.GetIdString ();
                         return "c-pd";
                     }
@@ -484,6 +489,10 @@ namespace FuGetGallery
             public override void Indent()
             {
                 indentLevel++;                
+            }
+
+            public override void WriteInterpolatedText (string text)
+            {
             }
 
             public override void Space()
@@ -550,7 +559,7 @@ namespace FuGetGallery
                 w.Write("</span>");
             }
 
-            public override void WritePrimitiveValue (object value, string literalValue = null)
+            public override void WritePrimitiveValue (object value, LiteralFormat literalFormat = LiteralFormat.None)
             {
                 WriteIndent ();
                 WritePrimitiveHtml (value, w);

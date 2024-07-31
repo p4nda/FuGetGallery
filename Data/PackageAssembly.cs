@@ -15,6 +15,7 @@ namespace FuGetGallery
         readonly Lazy<AssemblyDefinition> definition;
         readonly Lazy<ICSharpCode.Decompiler.CSharp.CSharpDecompiler> decompiler;
         readonly Lazy<ICSharpCode.Decompiler.CSharp.CSharpDecompiler> idecompiler;
+
         readonly ConcurrentDictionary<Tuple<TypeDefinition, string>, TypeDocumentation> typeDocs =
             new ConcurrentDictionary<Tuple<TypeDefinition, string>, TypeDocumentation> ();
 
@@ -28,12 +29,14 @@ namespace FuGetGallery
         }
 
         public AssemblyDefinition Definition => definition.Value;
-        
-        public bool IsBuildAssembly => ArchiveEntry.FullName.StartsWith ("build/", StringComparison.InvariantCultureIgnoreCase);
+
+        public bool IsBuildAssembly =>
+            ArchiveEntry.FullName.StartsWith ("build/", StringComparison.InvariantCultureIgnoreCase);
 
         public bool IsPublic => Definition.Modules.Any (m => m.Types.Any (t => t.IsPublic));
 
-        public IEnumerable<TypeDefinition> PublicTypes => Definition.Modules.SelectMany (m => m.Types.Where (t => t.IsPublic)).OrderBy (x => x.FullName);
+        public IEnumerable<TypeDefinition> PublicTypes => Definition.Modules
+            .SelectMany (m => m.Types.Where (t => t.IsPublic)).OrderBy (x => x.FullName);
 
         public override string ToString () => Definition.Name.Name;
 
@@ -41,7 +44,7 @@ namespace FuGetGallery
             : base (entry)
         {
             this.framework = framework;
-            
+
             definition = new Lazy<AssemblyDefinition> (() => {
                 try {
                     var ms = new MemoryStream ((int)ArchiveEntry.Length);
@@ -49,9 +52,9 @@ namespace FuGetGallery
                         es.CopyTo (ms);
                         ms.Position = 0;
                     }
-                    return AssemblyDefinition.ReadAssembly (ms, new ReaderParameters {
-                        AssemblyResolver = framework.AssemblyResolver,
-                    });
+
+                    return AssemblyDefinition.ReadAssembly (ms,
+                        new ReaderParameters { AssemblyResolver = framework.AssemblyResolver, });
                 }
                 catch (Exception ex) {
                     Debug.WriteLine ("Failed to load assembly");
@@ -59,48 +62,60 @@ namespace FuGetGallery
                     return null;
                 }
             }, true);
-            format = ICSharpCode.Decompiler.CSharp.OutputVisitor.FormattingOptionsFactory.CreateMono();
+
+            format = ICSharpCode.Decompiler.CSharp.OutputVisitor.FormattingOptionsFactory.CreateMono ();
             format.SpaceBeforeMethodCallParentheses = false;
             format.SpaceBeforeMethodDeclarationParentheses = false;
             format.SpaceBeforeConstructorDeclarationParentheses = false;
             format.PropertyBraceStyle = ICSharpCode.Decompiler.CSharp.OutputVisitor.BraceStyle.EndOfLine;
             format.PropertyGetBraceStyle = ICSharpCode.Decompiler.CSharp.OutputVisitor.BraceStyle.EndOfLine;
             format.PropertySetBraceStyle = ICSharpCode.Decompiler.CSharp.OutputVisitor.BraceStyle.EndOfLine;
-            format.AutoPropertyFormatting = ICSharpCode.Decompiler.CSharp.OutputVisitor.PropertyFormatting.ForceOneLine;
-            format.SimplePropertyFormatting = ICSharpCode.Decompiler.CSharp.OutputVisitor.PropertyFormatting.ForceOneLine;
+            format.AutoPropertyFormatting = ICSharpCode.Decompiler.CSharp.OutputVisitor.PropertyFormatting.SingleLine;
+            format.SimplePropertyFormatting = ICSharpCode.Decompiler.CSharp.OutputVisitor.PropertyFormatting.SingleLine;
             format.IndentPropertyBody = false;
-            format.IndexerDeclarationClosingBracketOnNewLine = ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
-            format.IndexerClosingBracketOnNewLine = ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
-            format.NewLineAferIndexerDeclarationOpenBracket = ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
-            format.NewLineAferIndexerOpenBracket = ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
+            format.IndexerDeclarationClosingBracketOnNewLine =
+                ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
+            format.IndexerClosingBracketOnNewLine =
+                ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
+            format.NewLineAferIndexerDeclarationOpenBracket =
+                ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
+            format.NewLineAferIndexerOpenBracket =
+                ICSharpCode.Decompiler.CSharp.OutputVisitor.NewLinePlacement.SameLine;
 
             idecompiler = new Lazy<ICSharpCode.Decompiler.CSharp.CSharpDecompiler> (() => {
-                var m = Definition?.MainModule;
-                if (m == null)
-                    return null;
-                return new ICSharpCode.Decompiler.CSharp.CSharpDecompiler (m, new ICSharpCode.Decompiler.DecompilerSettings {
-                    ShowXmlDocumentation = false,
-                    ThrowOnAssemblyResolveErrors = false,
-                    AlwaysUseBraces = false,
-                    CSharpFormattingOptions = format,
-                    ExpandMemberDefinitions = false,
-                    DecompileMemberBodies = false,
-                    UseExpressionBodyForCalculatedGetterOnlyProperties = true,
-                });
+                var fileName = Definition?.MainModule?.FileName;
+                if (fileName == null) return null;
+                var peFile = new ICSharpCode.Decompiler.Metadata.PEFile (fileName);
+                var assemblyResolver = framework.AssemblyResolver as ICSharpCode.Decompiler.Metadata.IAssemblyResolver;
+
+                return new ICSharpCode.Decompiler.CSharp.CSharpDecompiler (peFile, assemblyResolver,
+                    new ICSharpCode.Decompiler.DecompilerSettings {
+                        ShowXmlDocumentation = false,
+                        ThrowOnAssemblyResolveErrors = false,
+                        AlwaysUseBraces = false,
+                        CSharpFormattingOptions = format,
+                        ExpandMemberDefinitions = false,
+                        DecompileMemberBodies = false,
+                        UseExpressionBodyForCalculatedGetterOnlyProperties = true,
+                    });
             }, true);
+
             decompiler = new Lazy<ICSharpCode.Decompiler.CSharp.CSharpDecompiler> (() => {
-                var m = Definition?.MainModule;
-                if (m == null)
-                    return null;
-                return new ICSharpCode.Decompiler.CSharp.CSharpDecompiler (m, new ICSharpCode.Decompiler.DecompilerSettings {
-                    ShowXmlDocumentation = false,
-                    ThrowOnAssemblyResolveErrors = false,
-                    AlwaysUseBraces = false,
-                    CSharpFormattingOptions = format,
-                    ExpandMemberDefinitions = true,
-                    DecompileMemberBodies = true,
-                    UseExpressionBodyForCalculatedGetterOnlyProperties = true,
-                });
+                var fileName = Definition?.MainModule?.FileName;
+                if (fileName == null) return null;
+                var peFile = new ICSharpCode.Decompiler.Metadata.PEFile (fileName);
+                var assemblyResolver = framework.AssemblyResolver as ICSharpCode.Decompiler.Metadata.IAssemblyResolver;
+
+                return new ICSharpCode.Decompiler.CSharp.CSharpDecompiler (peFile, assemblyResolver,
+                    new ICSharpCode.Decompiler.DecompilerSettings {
+                        ShowXmlDocumentation = false,
+                        ThrowOnAssemblyResolveErrors = false,
+                        AlwaysUseBraces = false,
+                        CSharpFormattingOptions = format,
+                        ExpandMemberDefinitions = true,
+                        DecompileMemberBodies = true,
+                        UseExpressionBodyForCalculatedGetterOnlyProperties = true,
+                    });
             }, true);
         }
 
@@ -114,8 +129,10 @@ namespace FuGetGallery
             if (typeDocs.TryGetValue (key, out var docs)) {
                 return docs;
             }
+
             var asmName = typeDefinition.Module.Assembly.Name.Name;
-            docs = new TypeDocumentation (typeDefinition, framework, XmlDocs, decompiler, idecompiler, format, languageCode);
+            docs = new TypeDocumentation (typeDefinition, framework, XmlDocs, decompiler, idecompiler, format,
+                languageCode);
             typeDocs.TryAdd (key, docs);
             return docs;
         }
@@ -137,7 +154,7 @@ namespace FuGetGallery
                 return;
             var ds = NameScore (d.Name, query);
             if (ds != int.MinValue)
-                r.Add (framework, this, d, d.GetFriendlyName(), d.Namespace, "type", d.Name, d.IsPublic, ds);
+                r.Add (framework, this, d, d.GetFriendlyName (), d.Namespace, "type", d.Name, d.IsPublic, ds);
 
             foreach (var x in d.Methods)
                 SearchMethod (d, x, query, r);
@@ -152,10 +169,11 @@ namespace FuGetGallery
         void SearchMethod (TypeDefinition t, MethodDefinition d, string query, PackageSearchResults r)
         {
             var name = d.Name;
-            var nd = name.LastIndexOf('.');
+            var nd = name.LastIndexOf ('.');
             if (nd > 0 && nd + 1 < name.Length) {
                 name = name.Substring (nd + 1);
             }
+
             if (d.IsAddOn || d.IsRemoveOn || d.IsGetter || d.IsSetter)
                 return;
 
@@ -167,13 +185,15 @@ namespace FuGetGallery
         void SearchProperty (TypeDefinition t, PropertyDefinition d, string query, PackageSearchResults r)
         {
             var name = d.Name;
-            var nd = name.LastIndexOf('.');
+            var nd = name.LastIndexOf ('.');
             if (nd > 0 && nd + 1 < name.Length) {
                 name = name.Substring (nd + 1);
             }
+
             var ds = NameScore (name, query);
             if (ds != int.MinValue)
-                r.Add (framework, this, t, name, d.DeclaringType.Name, "property", d.Name, d.GetMethod != null && d.GetMethod.IsPublic, ds);
+                r.Add (framework, this, t, name, d.DeclaringType.Name, "property", d.Name,
+                    d.GetMethod != null && d.GetMethod.IsPublic, ds);
         }
 
         void SearchField (TypeDefinition t, FieldDefinition d, string query, PackageSearchResults r)
@@ -189,13 +209,15 @@ namespace FuGetGallery
         void SearchEvent (TypeDefinition t, EventDefinition d, string query, PackageSearchResults r)
         {
             var name = d.Name;
-            var nd = name.LastIndexOf('.');
+            var nd = name.LastIndexOf ('.');
             if (nd > 0 && nd + 1 < name.Length) {
                 name = name.Substring (nd + 1);
             }
+
             var ds = NameScore (name, query);
             if (ds != int.MinValue)
-                r.Add (framework, this, t, name, d.DeclaringType.Name, "event", d.Name, d.AddMethod != null && d.AddMethod.IsPublic, ds);
+                r.Add (framework, this, t, name, d.DeclaringType.Name, "event", d.Name,
+                    d.AddMethod != null && d.AddMethod.IsPublic, ds);
         }
 
         int NameScore (string name, string query)
@@ -207,9 +229,9 @@ namespace FuGetGallery
             while (qi < query.Length && ni < name.Length) {
                 var n = name[ni];
                 var q = query[qi];
-                var un = char.ToUpperInvariant(n);
-                var uq = char.ToUpperInvariant(q);
-                if (needsCap && (n == uq || (ni==0 && un == uq))) {
+                var un = char.ToUpperInvariant (n);
+                var uq = char.ToUpperInvariant (q);
+                if (needsCap && (n == uq || (ni == 0 && un == uq))) {
                     s++;
                     if (ni == 0 && qi == 0) s += 1000;
                     ni++;
@@ -227,6 +249,7 @@ namespace FuGetGallery
                     needsCap = true;
                 }
             }
+
             if (qi != query.Length) return int.MinValue;
             s -= (name.Length - ni);
             return s;
